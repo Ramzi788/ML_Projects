@@ -17,7 +17,8 @@ class MeanSquaredError(torch.autograd.Function):
         ------
         y: (scalar) The mean squared error between x1 and x2
         """
-
+        ctx.save_for_backward(x1, x2)
+        y = torch.mean((x1 - x2) ** 2)
         return y
 
     @staticmethod
@@ -35,5 +36,14 @@ class MeanSquaredError(torch.autograd.Function):
         dzdx1 (Tensor): of size(T x n), the gradients w.r.t x1
         dzdx2 (Tensor): of size(T x n), the gradients w.r.t x2
         """
+        x1, x2 = ctx.saved_tensors
+        
+        numel = x1.numel()
 
+        dydx1 = (2.0 / numel) * (x1 - x2)
+        dydx2 = (2.0 /numel) * (x2 - x1)
+
+        dzdx1 = dzdy * dydx1
+        dzdx2 = dzdy * dydx2
+        
         return dzdx1, dzdx2

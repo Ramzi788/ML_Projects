@@ -47,7 +47,7 @@ class GeneralizedLogistic(torch.autograd.Function):
 
         #Compute gradients 
         dzdx = dzdy * dydx
-        dzdl = (dzdy * dydl).sum()  
-        dzdu = (dzdy * dydu).sum()  
-        dzdg = (dzdy * dydg).sum()
+        dzdl = (dzdy * dydl).sum().reshape(l.shape)
+        dzdu = (dzdy * dydu).sum().reshape(u.shape)  
+        dzdg = (dzdy * dydg).sum().reshape(g.shape)
         return dzdx, dzdl, dzdu, dzdg

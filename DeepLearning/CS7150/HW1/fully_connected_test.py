@@ -53,7 +53,6 @@ def fully_connected_test():
 
     # Compute numerical gradients for X
     with torch.no_grad():
-        # Numerical gradient for X
         for t in range(X.shape[0]):
             for i in range(X.shape[1]):
                 x_plus = X.clone()
@@ -67,7 +66,6 @@ def fully_connected_test():
                 
                 diff = (y_plus - y_minus) / (2 * DELTA)
                 numerical_dzdx[t, i] = (dz_dy * diff).sum()
-        # Numerical gradient for W
         for i in range(W.shape[0]):
             for j in range(W.shape[1]):
                 w_plus = W.clone()
@@ -82,7 +80,6 @@ def fully_connected_test():
                 diff = (y_plus - y_minus) / (2 * DELTA)
                 numerical_dzdw[i, j] = (dz_dy * diff).sum()
         
-        # Numerical gradient for B
         for k in range(B.shape[0]):
             b_plus = B.clone()
             b_minus = B.clone()

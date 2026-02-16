@@ -32,10 +32,10 @@ def cnn_categorization_base(netspec_opts):
             net.add_module(layer_names[i], nn.Conv2d(in_channels, num_filters[i], kernel_size=kernel_sizes[i], stride=strides[i], padding=padding))
             in_channels = num_filters[i]
         elif layer_types[i] == 'bn':
-            net.add_module(layer_names[i], nn.BatchNorm2d(num_filters[i-1]))
+            net.add_module(layer_names[i], nn.BatchNorm2d(num_filters[i]))
         elif layer_types[i] == 'relu':
             net.add_module(layer_names[i], nn.ReLU())
         elif layer_types[i] == 'pool':
-            net.add_module(layer_names[i], nn.MaxPool2d(kernel_sizes[i], stride=strides[i], padding=0))
+            net.add_module(layer_names[i], nn.AvgPool2d(kernel_sizes[i], strides[i], padding=0))
 
     return net

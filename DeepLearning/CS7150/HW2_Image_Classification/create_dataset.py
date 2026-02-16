@@ -19,7 +19,7 @@ def create_dataset(data_path, output_path=None, contrast_normalization=False, wh
     val_ds: (TensorDataset), the examples (inputs and labels) in the validation set
     """
     # read the data and extract the various sets
-    dataset = torch.load(data_path)
+    dataset = torch.load(data_path, weights_only=False)
     data_tr = dataset["data_tr"]
     sets_tr = dataset["sets_tr"]
     label_tr = dataset["label_tr"]

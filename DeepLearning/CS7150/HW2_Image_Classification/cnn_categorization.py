@@ -56,9 +56,25 @@ def cnn_categorization(model_type="base",
 
     elif model_type == "improved":
         # create netspec_opts
-
+        netspec_opts = {
+            'kernel_size':  [3, 0, 0, 3, 0, 0, 2, 3, 0, 0, 3, 0, 0, 2, 3, 0, 0, 3, 0, 0, 2, 4, 1],
+            'num_filters':  [64, 64, 0, 64, 64, 0, 0, 128, 128, 0, 128, 128, 0, 0, 256, 256, 0, 256, 256, 0, 0, 0, 16],
+            'stride':       [1, 0, 0, 1, 0, 0, 2, 1, 0, 0, 1, 0, 0, 2, 1, 0, 0, 1, 0, 0, 2, 1, 1],
+            'layer_type':   ['conv', 'bn', 'relu', 'conv', 'bn', 'relu', 'pool',
+                            'conv', 'bn', 'relu', 'conv', 'bn', 'relu', 'pool',
+                            'conv', 'bn', 'relu', 'conv', 'bn', 'relu', 'pool',
+                            'pool', 'conv']
+        }
         # create train_opts
-
+        train_opts = {
+            'lr': 0.1,
+            'weight_decay': 0.0005,
+            'batch_size': 128,
+            'momentum': 0.9,
+            'num_epochs': 60,
+            'step_size': 20,
+            'gamma': 0.1
+        }
         # create improved model
         model = cnn_categorization_improved(netspec_opts)
     else:

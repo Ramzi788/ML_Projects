@@ -1,16 +1,27 @@
+import torch
 import torch.nn as nn
+from torchvision import transforms
+
+class AugmentedModel(nn.Module):
+    def __init__(self, net):
+        super().__init__()
+        self.net = net
+        self.augment = transforms.Compose([
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomErasing(p=0.3, scale=(0.02, 0.2)),
+        ])
+
+    def forward(self, x):
+        if self.training:
+            x = self.augment(x)
+            return self.net(x)
+        else:
+            out1 = self.net(x)
+            out2 = self.net(torch.flip(x, dims=[3]))
+            return (out1 + out2) / 2
+
 def cnn_categorization_improved(netspec_opts):
-    """
-    Constructs a network for the improved categorization model.
-
-    Arguments
-    --------
-    netspec_opts: (dictionary), the improved network's architecture.
-
-    Returns
-    -------
-    A categorization model which can be trained by PyTorch
-    """
     net = nn.Sequential()
     in_channels = 3
 
@@ -23,6 +34,7 @@ def cnn_categorization_improved(netspec_opts):
     bn_count = 0
     relu_count = 0
     pool_count = 0
+    drop_count = 0
 
     for i in range(len(layer_types)):
         if layer_types[i] == 'conv':
@@ -40,4 +52,8 @@ def cnn_categorization_improved(netspec_opts):
         elif layer_types[i] == 'pool':
             pool_count += 1
             net.add_module(f'pool_{pool_count}', nn.AvgPool2d(kernel_sizes[i], strides[i], padding=0))
-    return net
+        elif layer_types[i] == 'dropout':
+            drop_count += 1
+            net.add_module(f'drop_{drop_count}', nn.Dropout2d(0.15))
+
+    return AugmentedModel(net)

@@ -25,7 +25,7 @@ def cnn_categorization_base(netspec_opts):
     kernel_sizes = netspec_opts['kernel_size']
     num_filters = netspec_opts['num_filters']
     strides = netspec_opts['stride']
-    
+
     for i in range(len(layer_types)):
         if layer_types[i] == 'conv':
             padding = (kernel_sizes[i] - 1) // 2

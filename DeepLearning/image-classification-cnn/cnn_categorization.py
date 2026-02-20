@@ -34,6 +34,7 @@ def cnn_categorization(model_type="base",
     # specify the network architecture and the training policy of the models under
     # the respective blocks
     if model_type == "base":
+        random.manual_seed(0)
         # create netspec_opts
         netspec_opts = {
             'kernel_size': [3, 0, 0, 3, 0, 0, 3, 0, 0, 8, 1],

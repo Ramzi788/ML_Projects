@@ -7,7 +7,7 @@ from argparse import ArgumentParser
 import matplotlib.pyplot as plt
 
 # seed the random number generator. Remove the line below if you want to try different initializations
-random.manual_seed(0)
+# random.manual_seed(0)
 
 
 def cnn_categorization(model_type="base",

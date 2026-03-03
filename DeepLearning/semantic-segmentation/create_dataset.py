@@ -15,7 +15,7 @@ def create_dataset(data_path):
     train_ds: (TensorDataset), the examples (inputs and labels) in the training set
     val_ds: (TensorDataset), the examples (inputs and labels) in the validation set
     """
-    data = load(data_path)
+    data = load(data_path, weights_only=False)
 
     images_tr = data['images_tr']
     anno_tr = data['anno_tr']

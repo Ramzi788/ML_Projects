@@ -1,15 +1,18 @@
 from semantic_segmentation_base import SemanticSegmentationBase
 from semantic_segmentation_improved import SemanticSegmentationImproved
 from create_dataset import create_dataset
-from train import train
+from train import train as train_base
+from train_mod import train as train_improved
 from utils import distrib
-from torch import save, random
+from torch import save, random, cat, flip
+from torch.utils.data import TensorDataset
 from torch.nn import CrossEntropyLoss
 from argparse import ArgumentParser
 import matplotlib.pyplot as plt
 
 # seeding the random number generator. You can disable the seeding for the improvement model
 random.manual_seed(0)
+
 
 def augment_dataset(train_ds):
     """
@@ -31,6 +34,7 @@ def augment_dataset(train_ds):
     all_labels.append(flip(labels, [1, 2]))
 
     return TensorDataset(cat(all_images, dim=0), cat(all_labels, dim=0))
+
 
 def semantic_segmentation(model_type="base"):
     """
@@ -72,9 +76,11 @@ def semantic_segmentation(model_type="base"):
 
         model = SemanticSegmentationBase(netspec_opts)
 
-    elif model_type == "improved":
-        from train_mod import train
+        # train the model
+        train_base(model, train_dl, val_dl, train_opts, exp_dir=exp_dir)
 
+    elif model_type == "improved":
+        # compute class weights for class imbalance
         class_counts, rgb_mean = distrib(train_dl)
         total_pixels = class_counts.sum().float()
         num_classes = len(class_counts)
@@ -82,12 +88,15 @@ def semantic_segmentation(model_type="base"):
         class_weights = class_weights / class_weights.mean()
         class_weights = class_weights.clamp(min=0.1, max=10.0)
 
+        # augment training data with flips (4x)
         train_dl = augment_dataset(train_dl)
 
+        # specify netspec_opts
         netspec_opts = {
             'num_classes': 36,
         }
 
+        # specify train_opts
         train_opts = {
             'lr': 0.001,
             'num_epochs': 120,
@@ -103,11 +112,12 @@ def semantic_segmentation(model_type="base"):
         }
 
         model = SemanticSegmentationImproved(netspec_opts)
+
+        # train the model
+        train_improved(model, train_dl, val_dl, train_opts, exp_dir=exp_dir)
+
     else:
         raise ValueError(f"Error: unknown model type {model_type}")
-
-    # train the model
-    train(model, train_dl, val_dl, train_opts, exp_dir=exp_dir)
 
     # save model's state and architecture to the base directory
     model = {"state": model.state_dict(), "specs": netspec_opts}

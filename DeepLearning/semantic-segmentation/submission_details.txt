@@ -1,0 +1,18 @@
+Improved model: U-Net encoder-decoder with residual blocks.
+
+Architecture:
+- 3 encoder blocks with 3 conv layers + BN + ReLU + residual connection each (64/128/256 filters). Strided conv downsampling.
+- Bottleneck: 512-filter ResBlock, Dropout2d(0.3).
+- 3 decoder blocks: transposed conv upsample, skip connection (1x1 conv+BN+Sum) from encoder, 3-conv ResBlock.
+- 1x1 conv classifier, 36 classes at 32x32.
+- Dropout (0.1-0.3) throughout.
+- Full receptive field before upsampling vs partial in base.
+
+Training:
+- Weighted CrossEntropyLoss (inverse freq) + label_smoothing=0.1 for class imbalance.
+- 4x data augmentation: horizontal, vertical, combined flips.
+- Adam (lr=0.001) with cosine annealing, 120 epochs.
+- Early stopping (patience=30) on best per-class accuracy.
+- weight_decay=1e-4.
+
+Key gains: residual connections, 3 skip connections (vs 1), class weighting, augmentation, label smoothing, early stopping.

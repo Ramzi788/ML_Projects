@@ -3,6 +3,9 @@ from torch.utils.data import DataLoader
 from os import path, mkdir
 import matplotlib.pyplot as plt
 import copy
+import torch
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def train(model, train_ds, val_ds, train_opts, exp_dir=None):
@@ -20,13 +23,15 @@ def train(model, train_ds, val_ds, train_opts, exp_dir=None):
 
     """
 
+    model.to(device)
+
     train_dl = DataLoader(train_ds, train_opts["batch_size"], shuffle=True)
     val_dl = DataLoader(val_ds, len(val_ds), shuffle=False)
 
     num_tr = train_ds.tensors[0].size(0)
     num_val = val_ds.tensors[0].size(0)
 
-    print(f"Training on {num_tr} and validating on {num_val} images")
+    print(f"Training on {num_tr} and validating on {num_val} images (device: {device})")
 
     # We use the Adam optimizer for faster and smoother convergence
     # compared to SGD used in the base model
@@ -46,7 +51,7 @@ def train(model, train_ds, val_ds, train_opts, exp_dir=None):
     )
 
     # the loss function (weighted cross entropy with label smoothing)
-    criterion = train_opts["objective"]
+    criterion = train_opts["objective"].to(device)
 
     # track the training metrics
     tr_loss = []
@@ -72,9 +77,9 @@ def train(model, train_ds, val_ds, train_opts, exp_dir=None):
         # validation phase
         model.eval()
         e_loss_val, predictions = fit(model, val_dl, criterion)
-        
+
         lr_scheduler.step()
-        e_per_class_acc, e_pixel_acc, e_iu_score = accuracy_metrics(predictions, val_ds.tensors[1])
+        e_per_class_acc, e_pixel_acc, e_iu_score = accuracy_metrics(predictions.cpu(), val_ds.tensors[1])
 
         val_loss.append(e_loss_val)
         pixel_acc.append(e_pixel_acc)
@@ -114,6 +119,9 @@ def train(model, train_ds, val_ds, train_opts, exp_dir=None):
     print(f"Restoring best model with class_acc: {best_class_acc:.2%}")
     model.load_state_dict(best_model_wts)
 
+    # move model back to CPU for saving and submission
+    model.cpu()
+
     # plot the training metrics at the end of training
     plot(tr_loss, val_loss, per_class_acc, pixel_acc, iu_score)
 
@@ -139,6 +147,8 @@ def fit(model, data_dl, criterion, optimizer=None):
 
     predictions = []
     for images, annots in data_dl:
+        images = images.to(device)
+        annots = annots.to(device)
         pred = model(images)
         loss = criterion(pred, annots)
         e_loss += loss.item()

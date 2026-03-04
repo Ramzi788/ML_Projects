@@ -25,15 +25,17 @@ class AugmentedSegDataset(Dataset):
     def __init__(self, images, annotations):
         self.images = images
         self.annotations = annotations.long()
-        self.color_jitter = T.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.2, hue=0.05)
-        self.tensors = (images, annotations)  # needed for compatibility with train.py
+        self.color_jitter = T.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.3, hue=0.1)
+        self.tensors = (images, annotations)
 
     def __len__(self):
-        return len(self.images)
+        # report 4x the actual size so each epoch sees more augmented versions
+        return len(self.images) * 4
 
     def __getitem__(self, idx):
-        image = self.images[idx].clone()
-        anno = self.annotations[idx].clone()
+        real_idx = idx % len(self.images)
+        image = self.images[real_idx].clone()
+        anno = self.annotations[real_idx].clone()
 
         # random horizontal flip
         if torch.rand(1).item() > 0.5:
@@ -101,15 +103,17 @@ def semantic_segmentation(model_type="base"):
         all_annots = data['anno_tr']
 
         # compute class weights using all data for class imbalance
+        # use sqrt of inverse frequency for less extreme weighting
         train_all = TensorDataset(all_images, all_annots)
         class_counts, rgb_mean = distrib(train_all)
         total_pixels = class_counts.sum().float()
         num_classes = len(class_counts)
-        class_weights = total_pixels / (num_classes * class_counts.float() + 1e-6)
+        class_weights = torch.sqrt(total_pixels / (num_classes * class_counts.float() + 1e-6))
         class_weights = class_weights / class_weights.mean()
-        class_weights = class_weights.clamp(min=0.1, max=10.0)
+        class_weights = class_weights.clamp(min=0.2, max=5.0)
 
         # create augmented dataset with on-the-fly ColorJitter and random flips
+        # dataset reports 4x size so each epoch sees more augmented versions
         train_aug = AugmentedSegDataset(all_images, all_annots)
 
         # specify netspec_opts
@@ -119,17 +123,17 @@ def semantic_segmentation(model_type="base"):
 
         # specify train_opts
         train_opts = {
-            'lr': 0.003,
-            'num_epochs': 150,
+            'lr': 0.001,
+            'num_epochs': 200,
             'momentum': 0.9,
-            'batch_size': 24,
+            'batch_size': 32,
             'step_size': 50,
             'gamma': 0.1,
-            'weight_decay': 1e-4,
+            'weight_decay': 5e-5,
             'objective': CrossEntropyLoss(weight=class_weights, label_smoothing=0.05),
             'optimizer': 'adam',
             'scheduler': 'cosine',
-            'patience': 40,
+            'patience': 50,
         }
 
         model = SemanticSegmentationImproved(netspec_opts)

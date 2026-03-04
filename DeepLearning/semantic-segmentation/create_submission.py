@@ -21,7 +21,7 @@ def create_submission(model_type, batch_size):
     if not exists(model_path):
         raise ValueError("Error: the trained model {} does not exits".format(model_path))
 
-    dataset = load("semantic_segmentation_dataset.pt")
+    dataset = load("semantic_segmentation_dataset.pt", weights_only=False)
 
     data_te = dataset["images_te"]
     sets_tr = dataset["sets_tr"]
@@ -30,7 +30,7 @@ def create_submission(model_type, batch_size):
 
     del dataset
 
-    model_state = load(model_path)
+    model_state = load(model_path, weights_only=False)
     if model_type == 'base':
         model = SemanticSegmentationBase(model_state['specs'])
     else:

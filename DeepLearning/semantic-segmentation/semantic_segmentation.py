@@ -4,36 +4,51 @@ from create_dataset import create_dataset
 from train import train as train_base
 from train_mod import train as train_improved
 from utils import distrib
-from torch import save, random, cat, flip
-from torch.utils.data import TensorDataset
+from torch import save, random, cat, flip, load
+from torch.utils.data import TensorDataset, Dataset
 from torch.nn import CrossEntropyLoss
 from argparse import ArgumentParser
 import matplotlib.pyplot as plt
+import torchvision.transforms as T
+import torch
 
 # seeding the random number generator. You can disable the seeding for the improvement model
 random.manual_seed(0)
 
 
-def augment_dataset(train_ds):
+class AugmentedSegDataset(Dataset):
     """
-    Augments the training dataset with flipped versions of images and annotations.
-    Produces 4x the original data (original + h-flip + v-flip + both flips).
+    Custom dataset that applies on-the-fly augmentation using torchvision.transforms.
+    Applies ColorJitter, random horizontal flip, and random vertical flip.
+    Both image and annotation are flipped together to keep them aligned.
     """
-    images, labels = train_ds.tensors
+    def __init__(self, images, annotations):
+        self.images = images
+        self.annotations = annotations.long()
+        self.color_jitter = T.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.2, hue=0.05)
+        self.tensors = (images, annotations)  # needed for compatibility with train.py
 
-    all_images = [images]
-    all_labels = [labels]
+    def __len__(self):
+        return len(self.images)
 
-    all_images.append(flip(images, [3]))
-    all_labels.append(flip(labels, [2]))
+    def __getitem__(self, idx):
+        image = self.images[idx].clone()
+        anno = self.annotations[idx].clone()
 
-    all_images.append(flip(images, [2]))
-    all_labels.append(flip(labels, [1]))
+        # random horizontal flip
+        if torch.rand(1).item() > 0.5:
+            image = torch.flip(image, [2])
+            anno = torch.flip(anno, [1])
 
-    all_images.append(flip(images, [2, 3]))
-    all_labels.append(flip(labels, [1, 2]))
+        # random vertical flip
+        if torch.rand(1).item() > 0.5:
+            image = torch.flip(image, [1])
+            anno = torch.flip(anno, [0])
 
-    return TensorDataset(cat(all_images, dim=0), cat(all_labels, dim=0))
+        # color jitter (only on image, not annotation)
+        image = self.color_jitter(image)
+
+        return image, anno
 
 
 def semantic_segmentation(model_type="base"):
@@ -80,16 +95,22 @@ def semantic_segmentation(model_type="base"):
         train_base(model, train_dl, val_dl, train_opts, exp_dir=exp_dir)
 
     elif model_type == "improved":
-        # compute class weights for class imbalance
-        class_counts, rgb_mean = distrib(train_dl)
+        # use ALL data (train + val) for training to maximize data
+        data = load("semantic_segmentation_dataset.pt", weights_only=False)
+        all_images = data['images_tr']
+        all_annots = data['anno_tr']
+
+        # compute class weights using all data for class imbalance
+        train_all = TensorDataset(all_images, all_annots)
+        class_counts, rgb_mean = distrib(train_all)
         total_pixels = class_counts.sum().float()
         num_classes = len(class_counts)
         class_weights = total_pixels / (num_classes * class_counts.float() + 1e-6)
         class_weights = class_weights / class_weights.mean()
         class_weights = class_weights.clamp(min=0.1, max=10.0)
 
-        # augment training data with flips (4x)
-        train_dl = augment_dataset(train_dl)
+        # create augmented dataset with on-the-fly ColorJitter and random flips
+        train_aug = AugmentedSegDataset(all_images, all_annots)
 
         # specify netspec_opts
         netspec_opts = {
@@ -98,23 +119,23 @@ def semantic_segmentation(model_type="base"):
 
         # specify train_opts
         train_opts = {
-            'lr': 0.001,
-            'num_epochs': 120,
+            'lr': 0.003,
+            'num_epochs': 150,
             'momentum': 0.9,
             'batch_size': 24,
             'step_size': 50,
             'gamma': 0.1,
             'weight_decay': 1e-4,
-            'objective': CrossEntropyLoss(weight=class_weights, label_smoothing=0.1),
+            'objective': CrossEntropyLoss(weight=class_weights, label_smoothing=0.05),
             'optimizer': 'adam',
             'scheduler': 'cosine',
-            'patience': 30,
+            'patience': 40,
         }
 
         model = SemanticSegmentationImproved(netspec_opts)
 
-        # train the model
-        train_improved(model, train_dl, val_dl, train_opts, exp_dir=exp_dir)
+        # train the model using all data with augmentation
+        train_improved(model, train_aug, val_dl, train_opts, exp_dir=exp_dir)
 
     else:
         raise ValueError(f"Error: unknown model type {model_type}")

@@ -4,7 +4,7 @@ from create_dataset import create_dataset
 from train import train as train_base
 from train_mod import train as train_improved
 from utils import distrib
-from torch import save, random, cat, flip, load
+from torch import save, random, cat, flip, load, rot90
 from torch.utils.data import TensorDataset
 from torch.nn import CrossEntropyLoss
 from argparse import ArgumentParser
@@ -16,17 +16,33 @@ random.manual_seed(0)
 
 def augment_dataset(train_ds):
     """
-    Pre-computes 4x augmented data with flips.
+    Pre-computes 8x augmented data with flips and 90-degree rotations.
     """
     images, labels = train_ds.tensors
     all_images = [images]
     all_labels = [labels]
+
     all_images.append(flip(images, [3]))
     all_labels.append(flip(labels, [2]))
+
     all_images.append(flip(images, [2]))
     all_labels.append(flip(labels, [1]))
+
     all_images.append(flip(images, [2, 3]))
     all_labels.append(flip(labels, [1, 2]))
+
+    all_images.append(rot90(images, 1, [2, 3]))
+    all_labels.append(rot90(labels, 1, [1, 2]))
+
+    all_images.append(rot90(images, 3, [2, 3]))
+    all_labels.append(rot90(labels, 3, [1, 2]))
+
+    all_images.append(flip(rot90(images, 1, [2, 3]), [3]))
+    all_labels.append(flip(rot90(labels, 1, [1, 2]), [2]))
+
+    all_images.append(flip(rot90(images, 3, [2, 3]), [3]))
+    all_labels.append(flip(rot90(labels, 3, [1, 2]), [2]))
+
     return TensorDataset(cat(all_images, dim=0), cat(all_labels, dim=0))
 
 
@@ -39,10 +55,8 @@ def semantic_segmentation(model_type="base"):
     model_type:  (String) a string in {'base', 'improved'} specifying the targeted model type
     """
     
-    # the dataset
     train_dl, val_dl = create_dataset("semantic_segmentation_dataset.pt")
 
-    # an optional export directory
     exp_dir = f"{model_type}_models"
 
     if model_type == "base":
@@ -74,13 +88,11 @@ def semantic_segmentation(model_type="base"):
         train_base(model, train_dl, val_dl, train_opts, exp_dir=exp_dir)
 
     elif model_type == "improved":
-        # use ALL data (train + val) for training to maximize data
         data = load("semantic_segmentation_dataset.pt", weights_only=False)
         all_images = data['images_tr']
         all_annots = data['anno_tr']
         train_all = TensorDataset(all_images, all_annots)
 
-        # compute class weights for class imbalance
         class_counts, rgb_mean = distrib(train_all)
         total_pixels = class_counts.sum().float()
         num_classes = len(class_counts)
@@ -88,7 +100,6 @@ def semantic_segmentation(model_type="base"):
         class_weights = class_weights / class_weights.mean()
         class_weights = class_weights.clamp(min=0.1, max=10.0)
 
-        # augment with 4x flips
         train_aug = augment_dataset(train_all)
 
         # specify netspec_opts
@@ -99,7 +110,7 @@ def semantic_segmentation(model_type="base"):
         # specify train_opts
         train_opts = {
             'lr': 0.001,
-            'num_epochs': 150,
+            'num_epochs': 200,
             'momentum': 0.9,
             'batch_size': 24,
             'step_size': 50,
@@ -108,7 +119,7 @@ def semantic_segmentation(model_type="base"):
             'objective': CrossEntropyLoss(weight=class_weights, label_smoothing=0.1),
             'optimizer': 'adam',
             'scheduler': 'cosine',
-            'patience': 40,
+            'patience': 50,
         }
 
         model = SemanticSegmentationImproved(netspec_opts)

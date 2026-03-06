@@ -21,11 +21,11 @@ def create_submission(model_type, batch_size):
 
     assert exists(model_path), f"Error: the trained model {model_path} does not exist"
 
-    dataset = load("semantic_segmentation_dataset.pt")
+    dataset = load("semantic_segmentation_dataset.pt", weights_only=False)
     data_val = dataset["images_tr"][dataset["sets_tr"] == 2]
     data_te = dataset["images_te"]
 
-    model_state = load(model_path)
+    model_state = load(model_path, weights_only=False)
     if model_type == 'base':
         model = SemanticSegmentationBase(model_state['specs'])
     else:

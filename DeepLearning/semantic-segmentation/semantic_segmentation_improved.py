@@ -64,60 +64,40 @@ class SemanticSegmentationImproved(nn.Module):
         self.netspec_opts = netspec_opts
         num_classes = netspec_opts.get('num_classes', 36)
 
-        self.enc1 = ResBlock(3, 64, dropout=0.1)
-        self.pool1 = nn.Sequential(
-            nn.Conv2d(64, 64, 3, stride=2, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True)
-        )
+        # Smaller filters + heavier dropout to reduce overfitting
+        self.enc1 = ResBlock(3, 48, dropout=0.2)
+        self.pool1 = nn.Sequential(nn.Conv2d(48, 48, 3, stride=2, padding=1), nn.BatchNorm2d(48), nn.ReLU(inplace=True))
 
-        self.enc2 = ResBlock(64, 128, dropout=0.1)
-        self.pool2 = nn.Sequential(
-            nn.Conv2d(128, 128, 3, stride=2, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True)
-        )
+        self.enc2 = ResBlock(48, 96, dropout=0.2)
+        self.pool2 = nn.Sequential(nn.Conv2d(96, 96, 3, stride=2, padding=1), nn.BatchNorm2d(96), nn.ReLU(inplace=True))
 
-        self.enc3 = ResBlock(128, 256, dropout=0.2)
-        self.pool3 = nn.Sequential(
-            nn.Conv2d(256, 256, 3, stride=2, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True)
-        )
+        self.enc3 = ResBlock(96, 192, dropout=0.3)
+        self.pool3 = nn.Sequential(nn.Conv2d(192, 192, 3, stride=2, padding=1), nn.BatchNorm2d(192), nn.ReLU(inplace=True))
 
-        self.bottleneck = ResBlock(256, 512, dropout=0.3)
+        self.bottleneck = ResBlock(192, 384, dropout=0.5)
 
-        self.up3 = nn.ConvTranspose2d(512, 256, 4, stride=2, padding=1, bias=False)
-        self.up3_bn = nn.BatchNorm2d(256)
+        self.up3 = nn.ConvTranspose2d(384, 192, 4, stride=2, padding=1, bias=False)
+        self.up3_bn = nn.BatchNorm2d(192)
         self.up3_relu = nn.ReLU(inplace=True)
-        self.skip3 = nn.Sequential(
-            nn.Conv2d(256, 256, 1, stride=1, padding=0),
-            nn.BatchNorm2d(256)
-        )
+        self.skip3 = nn.Sequential(nn.Conv2d(192, 192, 1, stride=1, padding=0), nn.BatchNorm2d(192))
         self.sum3 = Sum()
-        self.dec3 = ResBlock(256, 256, dropout=0.2)
+        self.dec3 = ResBlock(192, 192, dropout=0.3)
 
-        self.up2 = nn.ConvTranspose2d(256, 128, 4, stride=2, padding=1, bias=False)
-        self.up2_bn = nn.BatchNorm2d(128)
+        self.up2 = nn.ConvTranspose2d(192, 96, 4, stride=2, padding=1, bias=False)
+        self.up2_bn = nn.BatchNorm2d(96)
         self.up2_relu = nn.ReLU(inplace=True)
-        self.skip2 = nn.Sequential(
-            nn.Conv2d(128, 128, 1, stride=1, padding=0),
-            nn.BatchNorm2d(128)
-        )
+        self.skip2 = nn.Sequential(nn.Conv2d(96, 96, 1, stride=1, padding=0), nn.BatchNorm2d(96))
         self.sum2 = Sum()
-        self.dec2 = ResBlock(128, 128, dropout=0.1)
+        self.dec2 = ResBlock(96, 96, dropout=0.2)
 
-        self.up1 = nn.ConvTranspose2d(128, 64, 4, stride=2, padding=1, bias=False)
-        self.up1_bn = nn.BatchNorm2d(64)
+        self.up1 = nn.ConvTranspose2d(96, 48, 4, stride=2, padding=1, bias=False)
+        self.up1_bn = nn.BatchNorm2d(48)
         self.up1_relu = nn.ReLU(inplace=True)
-        self.skip1 = nn.Sequential(
-            nn.Conv2d(64, 64, 1, stride=1, padding=0),
-            nn.BatchNorm2d(64)
-        )
+        self.skip1 = nn.Sequential(nn.Conv2d(48, 48, 1, stride=1, padding=0), nn.BatchNorm2d(48))
         self.sum1 = Sum()
-        self.dec1 = ResBlock(64, 64, dropout=0.1)
+        self.dec1 = ResBlock(48, 48, dropout=0.2)
 
-        self.classifier = nn.Conv2d(64, num_classes, 1, stride=1, padding=0)
+        self.classifier = nn.Conv2d(48, num_classes, 1, stride=1, padding=0)
 
     def forward(self, x):
         """

@@ -98,7 +98,7 @@ def semantic_segmentation(model_type="base"):
             'batch_size': 24,
             'step_size': 50,
             'gamma': 0.1,
-            'weight_decay': 1e-4,
+            'weight_decay': 1e-3,
             'objective': CrossEntropyLoss(weight=class_weights, label_smoothing=0.1),
             'optimizer': 'adam',
             'scheduler': 'cosine',

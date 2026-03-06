@@ -1,4 +1,3 @@
-%%writefile semantic_segmentation.py
 from semantic_segmentation_base import SemanticSegmentationBase
 from semantic_segmentation_improved import SemanticSegmentationImproved
 from create_dataset import create_dataset

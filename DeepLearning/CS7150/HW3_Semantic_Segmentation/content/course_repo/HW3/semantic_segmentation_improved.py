@@ -4,10 +4,10 @@ from torch import nn
 from sum_layer import Sum
 
 
-class ResBlock(nn.Module):
-    """Residual block with 3 conv layers, BN, ReLU, and a residual connection."""
+class Block(nn.Module):
+    """Block with 2 conv layers, BN, ReLU, and dropout."""
     def __init__(self, in_ch, out_ch, dropout=0.0):
-        super(ResBlock, self).__init__()
+        super(Block, self).__init__()
         self.conv1 = nn.Conv2d(in_ch, out_ch, 3, stride=1, padding=1)
         self.bn1 = nn.BatchNorm2d(out_ch)
         self.relu1 = nn.ReLU(inplace=True)
@@ -16,31 +16,11 @@ class ResBlock(nn.Module):
         self.bn2 = nn.BatchNorm2d(out_ch)
         self.relu2 = nn.ReLU(inplace=True)
 
-        self.conv3 = nn.Conv2d(out_ch, out_ch, 3, stride=1, padding=1)
-        self.bn3 = nn.BatchNorm2d(out_ch)
-        self.relu3 = nn.ReLU(inplace=True)
-
-        self.match_channels = None
-        if in_ch != out_ch:
-            self.match_channels = nn.Sequential(
-                nn.Conv2d(in_ch, out_ch, 1, stride=1, padding=0),
-                nn.BatchNorm2d(out_ch)
-            )
-
         self.dropout = nn.Dropout2d(dropout) if dropout > 0 else None
 
     def forward(self, x):
-        residual = x
-        if self.match_channels is not None:
-            residual = self.match_channels(x)
-
         out = self.relu1(self.bn1(self.conv1(x)))
         out = self.relu2(self.bn2(self.conv2(out)))
-        out = self.bn3(self.conv3(out))
-
-        out = out + residual
-        out = self.relu3(out)
-
         if self.dropout is not None:
             out = self.dropout(out)
         return out
@@ -64,40 +44,40 @@ class SemanticSegmentationImproved(nn.Module):
         self.netspec_opts = netspec_opts
         num_classes = netspec_opts.get('num_classes', 36)
 
-        # Smaller filters + heavier dropout to reduce overfitting
-        self.enc1 = ResBlock(3, 48, dropout=0.2)
-        self.pool1 = nn.Sequential(nn.Conv2d(48, 48, 3, stride=2, padding=1), nn.BatchNorm2d(48), nn.ReLU(inplace=True))
+        # 32/64/128/256 filters with 2 conv per block
+        self.enc1 = Block(3, 32, dropout=0.15)
+        self.pool1 = nn.Sequential(nn.Conv2d(32, 32, 3, stride=2, padding=1), nn.BatchNorm2d(32), nn.ReLU(inplace=True))
 
-        self.enc2 = ResBlock(48, 96, dropout=0.2)
-        self.pool2 = nn.Sequential(nn.Conv2d(96, 96, 3, stride=2, padding=1), nn.BatchNorm2d(96), nn.ReLU(inplace=True))
+        self.enc2 = Block(32, 64, dropout=0.15)
+        self.pool2 = nn.Sequential(nn.Conv2d(64, 64, 3, stride=2, padding=1), nn.BatchNorm2d(64), nn.ReLU(inplace=True))
 
-        self.enc3 = ResBlock(96, 192, dropout=0.3)
-        self.pool3 = nn.Sequential(nn.Conv2d(192, 192, 3, stride=2, padding=1), nn.BatchNorm2d(192), nn.ReLU(inplace=True))
+        self.enc3 = Block(64, 128, dropout=0.2)
+        self.pool3 = nn.Sequential(nn.Conv2d(128, 128, 3, stride=2, padding=1), nn.BatchNorm2d(128), nn.ReLU(inplace=True))
 
-        self.bottleneck = ResBlock(192, 384, dropout=0.5)
+        self.bottleneck = Block(128, 256, dropout=0.3)
 
-        self.up3 = nn.ConvTranspose2d(384, 192, 4, stride=2, padding=1, bias=False)
-        self.up3_bn = nn.BatchNorm2d(192)
+        self.up3 = nn.ConvTranspose2d(256, 128, 4, stride=2, padding=1, bias=False)
+        self.up3_bn = nn.BatchNorm2d(128)
         self.up3_relu = nn.ReLU(inplace=True)
-        self.skip3 = nn.Sequential(nn.Conv2d(192, 192, 1, stride=1, padding=0), nn.BatchNorm2d(192))
+        self.skip3 = nn.Sequential(nn.Conv2d(128, 128, 1, stride=1, padding=0), nn.BatchNorm2d(128))
         self.sum3 = Sum()
-        self.dec3 = ResBlock(192, 192, dropout=0.3)
+        self.dec3 = Block(128, 128, dropout=0.2)
 
-        self.up2 = nn.ConvTranspose2d(192, 96, 4, stride=2, padding=1, bias=False)
-        self.up2_bn = nn.BatchNorm2d(96)
+        self.up2 = nn.ConvTranspose2d(128, 64, 4, stride=2, padding=1, bias=False)
+        self.up2_bn = nn.BatchNorm2d(64)
         self.up2_relu = nn.ReLU(inplace=True)
-        self.skip2 = nn.Sequential(nn.Conv2d(96, 96, 1, stride=1, padding=0), nn.BatchNorm2d(96))
+        self.skip2 = nn.Sequential(nn.Conv2d(64, 64, 1, stride=1, padding=0), nn.BatchNorm2d(64))
         self.sum2 = Sum()
-        self.dec2 = ResBlock(96, 96, dropout=0.2)
+        self.dec2 = Block(64, 64, dropout=0.15)
 
-        self.up1 = nn.ConvTranspose2d(96, 48, 4, stride=2, padding=1, bias=False)
-        self.up1_bn = nn.BatchNorm2d(48)
+        self.up1 = nn.ConvTranspose2d(64, 32, 4, stride=2, padding=1, bias=False)
+        self.up1_bn = nn.BatchNorm2d(32)
         self.up1_relu = nn.ReLU(inplace=True)
-        self.skip1 = nn.Sequential(nn.Conv2d(48, 48, 1, stride=1, padding=0), nn.BatchNorm2d(48))
+        self.skip1 = nn.Sequential(nn.Conv2d(32, 32, 1, stride=1, padding=0), nn.BatchNorm2d(32))
         self.sum1 = Sum()
-        self.dec1 = ResBlock(48, 48, dropout=0.2)
+        self.dec1 = Block(32, 32, dropout=0.15)
 
-        self.classifier = nn.Conv2d(48, num_classes, 1, stride=1, padding=0)
+        self.classifier = nn.Conv2d(32, num_classes, 1, stride=1, padding=0)
 
     def forward(self, x):
         """

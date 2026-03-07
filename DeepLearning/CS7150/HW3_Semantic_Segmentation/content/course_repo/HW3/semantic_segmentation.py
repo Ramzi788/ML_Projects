@@ -90,16 +90,17 @@ def semantic_segmentation(model_type="base"):
             'num_classes': 36,
         }
 
-        # specify train_opts — SGD with high LR and multi-step decay
+        # specify train_opts — SGD with Nesterov and multi-step decay
         train_opts = {
             'lr': 0.05,
-            'num_epochs': 200,
+            'num_epochs': 300,
             'momentum': 0.9,
-            'batch_size': 24,
             'gamma': 0.2,
-            'weight_decay': 5e-4,
-            'milestones': [80, 130, 170],
-            'objective': CrossEntropyLoss(weight=class_weights, label_smoothing=0.05),
+            'weight_decay': 1e-3,
+            'batch_size': 24,
+            'milestones': [100, 180, 250],
+            'objective': CrossEntropyLoss(weight=class_weights, label_smoothing=0.1),
+            'patience': 60,
         }
 
         model = SemanticSegmentationImproved(netspec_opts)

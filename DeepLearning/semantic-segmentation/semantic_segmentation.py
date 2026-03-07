@@ -90,19 +90,16 @@ def semantic_segmentation(model_type="base"):
             'num_classes': 36,
         }
 
-        # specify train_opts
+        # specify train_opts — SGD with high LR and multi-step decay
         train_opts = {
-            'lr': 0.001,
+            'lr': 0.05,
             'num_epochs': 200,
             'momentum': 0.9,
             'batch_size': 24,
-            'step_size': 50,
-            'gamma': 0.1,
-            'weight_decay': 1e-3,
-            'objective': CrossEntropyLoss(weight=class_weights, label_smoothing=0.1),
-            'optimizer': 'adam',
-            'scheduler': 'cosine',
-            'patience': 50,
+            'gamma': 0.2,
+            'weight_decay': 5e-4,
+            'milestones': [80, 130, 170],
+            'objective': CrossEntropyLoss(weight=class_weights, label_smoothing=0.05),
         }
 
         model = SemanticSegmentationImproved(netspec_opts)

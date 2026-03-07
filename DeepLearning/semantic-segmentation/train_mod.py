@@ -33,21 +33,22 @@ def train(model, train_ds, val_ds, train_opts, exp_dir=None):
 
     print(f"Training on {num_tr} and validating on {num_val} images (device: {device})")
 
-    # We use the Adam optimizer for faster and smoother convergence
-    # compared to SGD used in the base model
-    optimizer = optim.Adam(
+    # We use SGD with Nesterov momentum for better generalization
+    optimizer = optim.SGD(
         model.parameters(),
         lr=train_opts["lr"],
-        weight_decay=train_opts["weight_decay"]
+        momentum=train_opts["momentum"],
+        weight_decay=train_opts["weight_decay"],
+        nesterov=True
     )
 
-    # We use cosine annealing to smoothly decay the learning rate
-    # from the initial value down to near zero over training
+    # Multi-step LR decay at specific milestones
     num_epochs = train_opts["num_epochs"]
-    lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(
+    milestones = train_opts.get("milestones", [60, 120, 160])
+    lr_scheduler = optim.lr_scheduler.MultiStepLR(
         optimizer=optimizer,
-        T_max=num_epochs,
-        eta_min=1e-6
+        milestones=milestones,
+        gamma=train_opts["gamma"]
     )
 
     # the loss function (weighted cross entropy with label smoothing)
@@ -61,10 +62,9 @@ def train(model, train_ds, val_ds, train_opts, exp_dir=None):
     iu_score = []
 
     # track the best model by per-class accuracy and use early stopping
-    # to prevent overfitting when validation accuracy stops improving
     best_class_acc = 0.0
     best_model_wts = copy.deepcopy(model.state_dict())
-    patience = train_opts.get("patience", 25)
+    patience = train_opts.get("patience", 50)
     no_improve = 0
 
     for epoch in range(num_epochs):

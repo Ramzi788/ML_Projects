@@ -1,11 +1,9 @@
 from torch import nn
-
-# import all other functions you may need
 from sum_layer import Sum
 
 
 class Block(nn.Module):
-    """Block with 2 conv layers, BN, ReLU, and dropout."""
+    """Block with 3 conv layers for larger receptive field."""
     def __init__(self, in_ch, out_ch, dropout=0.0):
         super(Block, self).__init__()
         self.conv1 = nn.Conv2d(in_ch, out_ch, 3, stride=1, padding=1)
@@ -16,11 +14,16 @@ class Block(nn.Module):
         self.bn2 = nn.BatchNorm2d(out_ch)
         self.relu2 = nn.ReLU(inplace=True)
 
+        self.conv3 = nn.Conv2d(out_ch, out_ch, 3, stride=1, padding=1)
+        self.bn3 = nn.BatchNorm2d(out_ch)
+        self.relu3 = nn.ReLU(inplace=True)
+
         self.dropout = nn.Dropout2d(dropout) if dropout > 0 else None
 
     def forward(self, x):
         out = self.relu1(self.bn1(self.conv1(x)))
         out = self.relu2(self.bn2(self.conv2(out)))
+        out = self.relu3(self.bn3(self.conv3(out)))
         if self.dropout is not None:
             out = self.dropout(out)
         return out
@@ -28,99 +31,96 @@ class Block(nn.Module):
 
 class SemanticSegmentationImproved(nn.Module):
     def __init__(self, netspec_opts):
-        """
-
-        Creates a fully convolutional neural network for the improve semantic segmentation model.
-
-
-        Arguments
-        ---------
-        netspec_opts: (dictionary), the architecture of the base semantic network.
-
-        """
         super(SemanticSegmentationImproved, self).__init__()
-
-        # implement the improvement model architecture
         self.netspec_opts = netspec_opts
         num_classes = netspec_opts.get('num_classes', 36)
 
-        # 32/64/128/256 filters with 2 conv per block
-        self.enc1 = Block(3, 32, dropout=0.15)
-        self.pool1 = nn.Sequential(nn.Conv2d(32, 32, 3, stride=2, padding=1), nn.BatchNorm2d(32), nn.ReLU(inplace=True))
+        # Encoder: 64 -> 128 -> 256 -> 512
+        self.enc1 = Block(3, 64, dropout=0.1)
+        self.pool1 = nn.Sequential(
+            nn.Conv2d(64, 64, 3, stride=2, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True)
+        )
 
-        self.enc2 = Block(32, 64, dropout=0.15)
-        self.pool2 = nn.Sequential(nn.Conv2d(64, 64, 3, stride=2, padding=1), nn.BatchNorm2d(64), nn.ReLU(inplace=True))
+        self.enc2 = Block(64, 128, dropout=0.1)
+        self.pool2 = nn.Sequential(
+            nn.Conv2d(128, 128, 3, stride=2, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True)
+        )
 
-        self.enc3 = Block(64, 128, dropout=0.2)
-        self.pool3 = nn.Sequential(nn.Conv2d(128, 128, 3, stride=2, padding=1), nn.BatchNorm2d(128), nn.ReLU(inplace=True))
+        self.enc3 = Block(128, 256, dropout=0.2)
+        self.pool3 = nn.Sequential(
+            nn.Conv2d(256, 256, 3, stride=2, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True)
+        )
 
-        self.bottleneck = Block(128, 256, dropout=0.3)
+        # Bottleneck at 4x4
+        self.bottleneck = Block(256, 512, dropout=0.3)
 
-        self.up3 = nn.ConvTranspose2d(256, 128, 4, stride=2, padding=1, bias=False)
-        self.up3_bn = nn.BatchNorm2d(128)
+        # Decoder 3: 4x4 -> 8x8
+        self.up3 = nn.ConvTranspose2d(512, 256, 4, stride=2, padding=1, bias=False)
+        self.up3_bn = nn.BatchNorm2d(256)
         self.up3_relu = nn.ReLU(inplace=True)
-        self.skip3 = nn.Sequential(nn.Conv2d(128, 128, 1, stride=1, padding=0), nn.BatchNorm2d(128))
+        self.skip3 = nn.Sequential(
+            nn.Conv2d(256, 256, 1, stride=1, padding=0),
+            nn.BatchNorm2d(256)
+        )
         self.sum3 = Sum()
-        self.dec3 = Block(128, 128, dropout=0.2)
+        self.dec3 = Block(256, 256, dropout=0.2)
 
-        self.up2 = nn.ConvTranspose2d(128, 64, 4, stride=2, padding=1, bias=False)
-        self.up2_bn = nn.BatchNorm2d(64)
+        # Decoder 2: 8x8 -> 16x16
+        self.up2 = nn.ConvTranspose2d(256, 128, 4, stride=2, padding=1, bias=False)
+        self.up2_bn = nn.BatchNorm2d(128)
         self.up2_relu = nn.ReLU(inplace=True)
-        self.skip2 = nn.Sequential(nn.Conv2d(64, 64, 1, stride=1, padding=0), nn.BatchNorm2d(64))
+        self.skip2 = nn.Sequential(
+            nn.Conv2d(128, 128, 1, stride=1, padding=0),
+            nn.BatchNorm2d(128)
+        )
         self.sum2 = Sum()
-        self.dec2 = Block(64, 64, dropout=0.15)
+        self.dec2 = Block(128, 128, dropout=0.1)
 
-        self.up1 = nn.ConvTranspose2d(64, 32, 4, stride=2, padding=1, bias=False)
-        self.up1_bn = nn.BatchNorm2d(32)
+        # Decoder 1: 16x16 -> 32x32
+        self.up1 = nn.ConvTranspose2d(128, 64, 4, stride=2, padding=1, bias=False)
+        self.up1_bn = nn.BatchNorm2d(64)
         self.up1_relu = nn.ReLU(inplace=True)
-        self.skip1 = nn.Sequential(nn.Conv2d(32, 32, 1, stride=1, padding=0), nn.BatchNorm2d(32))
+        self.skip1 = nn.Sequential(
+            nn.Conv2d(64, 64, 1, stride=1, padding=0),
+            nn.BatchNorm2d(64)
+        )
         self.sum1 = Sum()
-        self.dec1 = Block(32, 32, dropout=0.15)
+        self.dec1 = Block(64, 64, dropout=0.1)
 
-        self.classifier = nn.Conv2d(32, num_classes, 1, stride=1, padding=0)
+        # Final classifier
+        self.classifier = nn.Conv2d(64, num_classes, 1, stride=1, padding=0)
 
     def forward(self, x):
-        """
-        Define the forward propagation of the improvement model.
+        # Encoder
+        e1 = self.enc1(x)          # 32x32, 64ch
+        p1 = self.pool1(e1)        # 16x16
 
-        Arguments
-        ---------
-        x: (Tensor) of size (B x C X H X W) where B is the mini-batch size, C is the number of
-            channels and H and W are the spatial dimensions. X is the input activation volume.
+        e2 = self.enc2(p1)         # 16x16, 128ch
+        p2 = self.pool2(e2)        # 8x8
 
-        Returns
-        -------
-        out: (Tensor) of size (B x C' X H x W), where C' is the number of classes.
+        e3 = self.enc3(p2)         # 8x8, 256ch
+        p3 = self.pool3(e3)        # 4x4
 
-        """
+        b = self.bottleneck(p3)    # 4x4, 512ch
 
-        # implement the forward propagation
-        e1 = self.enc1(x)
-        p1 = self.pool1(e1)
-
-        e2 = self.enc2(p1)
-        p2 = self.pool2(e2)
-
-        e3 = self.enc3(p2)
-        p3 = self.pool3(e3)
-
-        b = self.bottleneck(p3)
-
+        # Decoder with skip connections
         d3 = self.up3_relu(self.up3_bn(self.up3(b)))
-        s3 = self.skip3(e3)
-        d3 = self.sum3(d3, s3)
+        d3 = self.sum3(d3, self.skip3(e3))
         d3 = self.dec3(d3)
 
         d2 = self.up2_relu(self.up2_bn(self.up2(d3)))
-        s2 = self.skip2(e2)
-        d2 = self.sum2(d2, s2)
+        d2 = self.sum2(d2, self.skip2(e2))
         d2 = self.dec2(d2)
 
         d1 = self.up1_relu(self.up1_bn(self.up1(d2)))
-        s1 = self.skip1(e1)
-        d1 = self.sum1(d1, s1)
+        d1 = self.sum1(d1, self.skip1(e1))
         d1 = self.dec1(d1)
 
         out = self.classifier(d1)
-        # return the final activation volume
         return out

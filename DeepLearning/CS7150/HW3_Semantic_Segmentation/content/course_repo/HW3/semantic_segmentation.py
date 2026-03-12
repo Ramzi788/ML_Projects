@@ -93,7 +93,7 @@ def semantic_segmentation(model_type="base"):
         # specify train_opts — SGD with Nesterov and multi-step decay
         train_opts = {
             'lr': 0.05,
-            'num_epochs': 500,
+            'num_epochs': 200,
             'momentum': 0.9,
             'gamma': 0.1,
             'weight_decay': 1e-3,

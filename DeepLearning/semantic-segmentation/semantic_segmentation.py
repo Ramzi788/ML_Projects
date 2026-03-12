@@ -4,7 +4,7 @@ from create_dataset import create_dataset
 from train import train as train_base
 from train_mod import train as train_improved
 from utils import distrib
-from torch import save, random, cat, flip
+from torch import save, random, cat, flip, load
 from torch.utils.data import TensorDataset
 from torch.nn import CrossEntropyLoss
 from argparse import ArgumentParser
@@ -74,8 +74,14 @@ def semantic_segmentation(model_type="base"):
         train_base(model, train_dl, val_dl, train_opts, exp_dir=exp_dir)
 
     elif model_type == "improved":
+        # use ALL data (train + val) for training
+        data = load("semantic_segmentation_dataset.pt", weights_only=False)
+        all_images = data['images_tr']
+        all_annots = data['anno_tr']
+        train_all = TensorDataset(all_images, all_annots)
+
         # compute class weights for class imbalance
-        class_counts, rgb_mean = distrib(train_dl)
+        class_counts, rgb_mean = distrib(train_all)
         total_pixels = class_counts.sum().float()
         num_classes = len(class_counts)
         class_weights = total_pixels / (num_classes * class_counts.float() + 1e-6)
@@ -83,24 +89,26 @@ def semantic_segmentation(model_type="base"):
         class_weights = class_weights.clamp(min=0.1, max=10.0)
 
         # augment with 4x flips
-        train_aug = augment_dataset(train_dl)
+        train_aug = augment_dataset(train_all)
 
         # specify netspec_opts
         netspec_opts = {
             'num_classes': 36,
         }
 
-        # specify train_opts — SGD with Nesterov and multi-step decay
+        # specify train_opts — Adam with cosine annealing (same as 87% run)
         train_opts = {
-            'lr': 0.01,
-            'num_epochs': 300,
+            'lr': 0.001,
+            'num_epochs': 200,
             'momentum': 0.9,
-            'gamma': 0.1,
-            'weight_decay': 1e-3,
             'batch_size': 24,
-            'milestones': [100, 180, 250],
+            'step_size': 50,
+            'gamma': 0.1,
+            'weight_decay': 1e-4,
             'objective': CrossEntropyLoss(weight=class_weights, label_smoothing=0.1),
-            'patience': 80,
+            'optimizer': 'adam',
+            'scheduler': 'cosine',
+            'patience': 50,
         }
 
         model = SemanticSegmentationImproved(netspec_opts)

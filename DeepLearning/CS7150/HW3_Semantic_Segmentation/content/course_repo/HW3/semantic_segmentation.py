@@ -92,15 +92,15 @@ def semantic_segmentation(model_type="base"):
 
         # specify train_opts — SGD with Nesterov and multi-step decay
         train_opts = {
-            'lr': 0.05,
-            'num_epochs': 200,
+            'lr': 0.01,
+            'num_epochs': 300,
             'momentum': 0.9,
             'gamma': 0.1,
             'weight_decay': 1e-3,
             'batch_size': 24,
             'milestones': [100, 180, 250],
             'objective': CrossEntropyLoss(weight=class_weights, label_smoothing=0.1),
-            'patience': 60,
+            'patience': 80,
         }
 
         model = SemanticSegmentationImproved(netspec_opts)

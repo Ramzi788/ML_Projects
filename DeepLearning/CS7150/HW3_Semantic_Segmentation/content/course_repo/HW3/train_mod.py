@@ -33,22 +33,19 @@ def train(model, train_ds, val_ds, train_opts, exp_dir=None):
 
     print(f"Training on {num_tr} and validating on {num_val} images (device: {device})")
 
-    # We use SGD with Nesterov momentum for better generalization
-    optimizer = optim.SGD(
+    # We use the Adam optimizer for faster and smoother convergence
+    optimizer = optim.Adam(
         model.parameters(),
         lr=train_opts["lr"],
-        momentum=train_opts["momentum"],
-        weight_decay=train_opts["weight_decay"],
-        nesterov=True
+        weight_decay=train_opts["weight_decay"]
     )
 
-    # Multi-step LR decay at specific milestones
+    # We use cosine annealing to smoothly decay the learning rate
     num_epochs = train_opts["num_epochs"]
-    milestones = train_opts.get("milestones", [60, 120, 160])
-    lr_scheduler = optim.lr_scheduler.MultiStepLR(
+    lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer,
-        milestones=milestones,
-        gamma=train_opts["gamma"]
+        T_max=num_epochs,
+        eta_min=1e-6
     )
 
     # the loss function (weighted cross entropy with label smoothing)
@@ -129,19 +126,6 @@ def train(model, train_ds, val_ds, train_opts, exp_dir=None):
 def fit(model, data_dl, criterion, optimizer=None):
     """
     Executes a training (or validation) epoch
-
-    Arguments
-    --------
-    model: (nn.Module), the segmentation model
-    data_dl: (DataLoader), the dataloader of the training or validation set
-    criterion: The objective function
-    optimizer: The optimization function (optional)
-
-    Returns
-    ------
-    e_loss: (float), the average loss on the given set for the epoch
-    predictions: (Tensor), the pixel-level predictions for the epoch. Computed only on the validation set for the accuracy
-                metrics
     """
     e_loss = 0
 
@@ -165,28 +149,12 @@ def fit(model, data_dl, criterion, optimizer=None):
 
 
 def accuracy_metrics(predictions, labels):
-
-    """
-    Computes the three accuracy metrics as explained in the assignment handout
-
-    Arguments
-    --------
-    predictions: (Tensor), the pixel-level predictions for a mini-batch of images
-    labels: (Tensor), the corresponding ground-truth labels of the mini-batch
-    Returns
-    -------
-    per_class_acc: (float), the per-class accuracy as described in the handout
-    pixel_acc: (float), the pixel accuracy as described in the handout
-    iu_score: (float), the intersection over union score as described in the handout
-
-    """
     per_class_acc = 0
     iu_score = 0
     pixel_acc = predictions.eq(labels).float().mean().item()
 
     classes = unique(labels)
 
-    # compute the per-class and IoU accuracies for each class
     for class_i in classes:
         predictions_i = predictions.eq(class_i)
         labels_i = labels.eq(class_i)
@@ -197,7 +165,6 @@ def accuracy_metrics(predictions, labels):
         per_class_acc += correct_predictions / num_class_i
         iu_score += correct_predictions / (predictions_i | labels_i).sum().item()
 
-    # average the accuracies over all the classes
     per_class_acc = per_class_acc / len(classes)
     iu_score = iu_score / len(classes)
 
@@ -205,18 +172,6 @@ def accuracy_metrics(predictions, labels):
 
 
 def plot(loss_tr, loss_val, per_class_acc, pixel_acc, iu_score):
-    """
-    plots the training metrics
-
-    Arguments
-    ---------
-    loss_tr: (list), the average epoch loss on the training set for each epoch
-    loss_val: (list), the average epoch loss on the validation set for each epoch
-    per_class_acc: (list), the average epoch per-class accuracy for each epoch
-    pixel_acc: (list), the average epoch pixel accuracy for each epoch
-    iu_score: (list), the average epoch IoU score for each epoch
-
-    """
     figure, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
     n = [i + 1 for i in range(len(loss_tr))]
 

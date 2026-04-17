@@ -1,2 +1,3 @@
 # ML_Projects
-Includes all my project and personal machine learning projects that I have worked on. 
+
+Personal machine learning and deep learning projects covering classical ML, neural networks built from scratch, image classification, semantic segmentation, text generation, and transformer language models.

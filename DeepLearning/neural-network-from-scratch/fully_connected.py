@@ -5,7 +5,7 @@ class FullyConnected(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, w, b):
         """
-        Computes the output of the fully_connected function given in the assignment
+        Computes the output of the fully_connected function given in this project
 
         Arguments
         ---------
